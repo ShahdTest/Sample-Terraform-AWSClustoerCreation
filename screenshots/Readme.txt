@@ -1,0 +1,2 @@
+I was unable to retrieve data via GET or execute POST requests. While I successfully extracted some information from the database in JSON format, 
+I unfortunately could not capture a successful REST API response

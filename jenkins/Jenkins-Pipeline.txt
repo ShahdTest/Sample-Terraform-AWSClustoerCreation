@@ -1,0 +1,144 @@
+pipeline {
+    agent any
+
+    tools {
+        nodejs 'nodejs' // Assuming Node.js is installed and configured in Jenkins
+    }
+
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+        BUILDVERSION = "sabdulaq/aul:devops"
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', credentialsId: 'GitHub-Cred', url: 'https://shahdabdulhaq@bitbucket.org/getstuff/devops-assignment.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'npm test' // Adjust if you have a different test command
+            }
+        }
+
+        stage('Image scan-trivy') {
+            steps {
+                echo "Image scan-trivy..."
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo "SonarQube Analysis..."
+                // withSonarQubeEnv('sonar') {
+                //    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=DevOps -Dsonar.projectKey=DevOps '''
+                // }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo "Quality Gate..."
+                // script {
+                //     waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                // }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'dockerHub-cred', toolName: 'docker') {
+                        sh "docker build -t $BUILDVERSION ."
+                    }
+                }
+            }
+        }
+
+        stage('Docker Image Scan') {
+            steps {
+                sh "trivy image --format table -o trivy-image-report.html $BUILDVERSION"
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'dockerHub-cred', toolName: 'docker') {
+                        sh "docker push $BUILDVERSION"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Kubernetes Resources') {
+            steps {
+                script {
+                    // Create TLS Secret
+                    sh 'kubectl create secret tls devops-aul --cert=/C/Users/user/Desktop/Aul/devops/devops-assignment/tls.crt --key=/C/Users/user/Desktop/Aul/devops/devops-assignment/tls.key -n devops'
+                    
+                    // Deploy the YAML files in the specified order in the devops namespace
+                    sh 'kubectl apply -f namespace.yaml -n devops'
+                    sh 'kubectl apply -f configmap.yaml -n devops'
+                    sh 'kubectl apply -f mongo-secret.yaml -n devops'
+                    sh 'kubectl apply -f mongo-statefulset.yaml -n devops'
+                    sh 'kubectl apply -f mongo-headless-service.yaml -n devops'
+                    sh 'kubectl apply -f mongo-deployment.yaml -n devops'
+                    sh 'kubectl apply -f app-deployment.yaml -n devops'
+                    sh 'kubectl apply -f ingress.yaml -n devops'
+                }
+            }
+        }
+
+        stage('Verify the Deployment') {
+            steps {
+                script {
+                    sh 'kubectl get pods -n devops'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                def jobName = env.JOB_NAME
+                def buildNumber = env.BUILD_NUMBER
+                def pipelineStatus = currentBuild.result ?: 'UNKNOWN'
+                def bannerColor = pipelineStatus.toUpperCase() == 'SUCCESS' ? 'green' : 'red'
+
+                def body = """
+                    <html>
+                    <body>
+                    <div style="border: 4px solid ${bannerColor}; padding: 10px;">
+                    <h2>${jobName} - Build ${buildNumber}</h2>
+                    <div style="background-color: ${bannerColor}; padding: 10px;">
+                    <h3 style="color: white;">Pipeline Status: ${pipelineStatus.toUpperCase()}</h3>
+                    </div>
+                    <p>Check the <a href="${BUILD_URL}">console output</a>.</p>
+                    </div>
+                    </body>
+                    </html>
+                """
+
+                emailext(
+                    subject: "${jobName} - Build ${buildNumber} - ${pipelineStatus.toUpperCase()}",
+                    body: body,
+                    to: 'bs.sabdulhaq@gmail.com', // Updated email address
+                    from: 'bs.sabdulhaq@gmail.com',
+                    replyTo: 'bs.sabdulhaq@gmail.com',
+                    mimeType: 'text/html',
+                    attachmentsPattern: 'trivy-image-report.html'
+                )
+            }
+        }
+    }
+}

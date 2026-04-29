@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: devops
+spec:
+  serviceName: "mongo"  # Links to the headless service
+  replicas: 3  # Number of MongoDB pods for redundancy
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:6.0  # Use a stable version of MongoDB
+        ports:
+        - containerPort: 27017

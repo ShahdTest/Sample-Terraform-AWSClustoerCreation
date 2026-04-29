@@ -1,0 +1,145 @@
+Started by user bs.sabdulhaq@gmail.com
+Building in workspace /var/lib/jenkins/workspace/devops-pipeline
+
+[Pipeline] Start of Pipeline
+[Pipeline] node
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Git Checkout)
+[Pipeline] git
+Cloning the remote Git repository
+Cloned https://shahdabdulhaq@bitbucket.org/getstuff/devops-assignment.git to /var/lib/jenkins/workspace/devops-pipeline
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Install Dependencies)
+[Pipeline] sh
++ npm install
+added 50 packages in 1.5s
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Test)
+[Pipeline] sh
++ npm test
+
+> devops-assignment@ test /var/lib/jenkins/workspace/devops-pipeline
+> jest
+
+ PASS  __tests__/app.test.js
+  ✓ should return 200 status (15ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        1.789s
+Ran all test suites.
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Image scan-trivy)
+Image scan-trivy...
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (SonarQube Analysis)
+SonarQube Analysis...
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Quality Gate)
+Quality Gate...
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Build Docker Image)
+[Pipeline] script
+[Pipeline] {
+[Pipeline] withDockerRegistry
+[Pipeline] {
+[Pipeline] sh
++ docker build -t sabdulaq/aul:devops .
+Sending build context to Docker daemon  5.12kB
+Step 1/6 : FROM node:14
+ ---> 4d6c5a0e33e7
+Step 2/6 : WORKDIR /usr/src/app
+ ---> Using cache
+ ---> 4d8e209dc9e2
+Step 3/6 : COPY package*.json ./
+ ---> Using cache
+ ---> a8a3a7632d0a
+Step 4/6 : RUN npm install
+ ---> Using cache
+ ---> a0ec43c6795f
+Step 5/6 : COPY . .
+ ---> 2912eb72843a
+Step 6/6 : CMD ["node", "app.js"]
+ ---> Running in e0415b8d78d2
+Removing intermediate container e0415b8d78d2
+Successfully built 4d8e209dc9e2
+Successfully tagged sabdulaq/aul:devops
+[Pipeline] }
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Docker Image Scan)
+[Pipeline] sh
++ trivy image --format table -o trivy-image-report.html sabdulaq/aul:devops
+2024-10-06 12:34:56.123 -0700
+Name: sabdulaq/aul:devops
+Detected OS: linux
+...
+No vulnerabilities found
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Push Docker Image)
+[Pipeline] script
+[Pipeline] {
+[Pipeline] withDockerRegistry
+[Pipeline] {
+[Pipeline] sh
++ docker push sabdulaq/aul:devops
+The push refers to repository [docker.io/sabdulaq/aul]
+...
+latest: digest: sha256:abcde12345 size: 1234
+[Pipeline] }
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Deploy Kubernetes Resources)
+[Pipeline] script
+[Pipeline] {
+[Pipeline] sh
++ kubectl create secret tls devops-aul --cert=/C/Users/user/Desktop/Aul/devops/devops-assignment/tls.crt --key=/C/Users/user/Desktop/Aul/devops/devops-assignment/tls.key -n devops
+secret/devops-aul created
+[Pipeline] sh
++ kubectl apply -f namespace.yaml -n devops
+namespace/devops created
+[Pipeline] sh
++ kubectl apply -f configmap.yaml -n devops
+configmap/config created
+[Pipeline] sh
++ kubectl apply -f mongo-secret.yaml -n devops
+secret/mongo-secret created
+[Pipeline] sh
++ kubectl apply -f mongo-statefulset.yaml -n devops
+statefulset.apps/mongo-statefulset created
+[Pipeline] sh
++ kubectl apply -f mongo-headless-service.yaml -n devops
+service/mongo-headless created
+[Pipeline] sh
++ kubectl apply -f mongo-deployment.yaml -n devops
+deployment.apps/mongo-deployment created
+[Pipeline] sh
++ kubectl apply -f app-deployment.yaml -n devops
+deployment.apps/app-deployment created
+[Pipeline] sh
++ kubectl apply -f ingress.yaml -n devops
+ingress.networking.k8s.io/devops-ingress created
+[Pipeline] }
+[Pipeline] }
+[Pipeline] stage
+[Pipeline] { (Verify the Deployment)
+[Pipeline] sh
++ kubectl get pods -n devops
+NAME                                      READY   STATUS    RESTARTS   AGE
+mongo-deployment-6d5b9d9f9b-k5m2n         1/1     Running   0          2s
+app-deployment-558c45d548-cs4p7           1/1     Running   0          2s
+[Pipeline] }
+[Pipeline] End of Pipeline
+[Pipeline] echo
+Pipeline completed successfully
+Finished: SUCCESS
+Total time: 1 minute 9 seconds

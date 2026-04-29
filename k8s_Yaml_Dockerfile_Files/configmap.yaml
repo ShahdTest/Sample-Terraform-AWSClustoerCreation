@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: devops
+data:
+  PROJECT_NAME: "devops-test-Project"
+  DB_URL: "mongodb://$(username):$(password)@mongo:27017/devOps?authSource=admin"
